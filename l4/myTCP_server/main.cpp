@@ -16,7 +16,7 @@
 #include <optional>
 
 namespace fs = std::filesystem;
-//const auto buffer_size = 4096;
+// const auto buffer_size = 4096;
 
 // Yes, I received your code. But why mess up the better code.
 // I just embellished. After analyzing the code,
@@ -31,13 +31,17 @@ const wchar_t separ =
 
 class Transceiver {
 public:
-  Transceiver(socket_wrapper::Socket client_sock, int fict, size_t size_fict)
-        : client_sock_(std::move(client_sock)), fict_(fict), size_fict_(size_fict) {};
+  Transceiver(int client_sock, int fict, size_t size_fict)
+      : client_sock_(client_sock), fict_(fict), size_fict_(size_fict){};
   Transceiver(const Transceiver &) = delete;
   Transceiver() = delete;
 
 public:
-  const socket_wrapper::Socket &ts_socket() const { return client_sock_; }
+  const /*socket_wrapper::Socket*/
+      int
+      ts_socket() const {
+    return client_sock_;
+  }
 
 public:
   bool send_buffer(const std::vector<char> &buffer) {
@@ -72,25 +76,26 @@ public:
     size_t buffer_size = 4096;
     std::vector<char> buffer(buffer_size);
 
-    file_stream.seekg(0,std::ios::end);
+    file_stream.seekg(0, std::ios::end);
     size_t count = file_stream.tellg();
-    file_stream.seekg(0,std::ios::beg);
+    file_stream.seekg(0, std::ios::beg);
 
-    if (size_fict_ > count) size_fict_ = count;
+    if (size_fict_ > count)
+      size_fict_ = count;
 
     if (1 == fict_) {
-         file_stream.seekg(size_fict_);
+      file_stream.seekg(size_fict_);
     } else if (2 == fict_) {
-        count = size_fict_;
+      count = size_fict_;
     }
 
     while (file_stream && count > 0) {
-        if (count < buffer_size) {
-            file_stream.read(&buffer[0], count);
-            count = 0;
+      if (count < buffer_size) {
+        file_stream.read(&buffer[0], count);
+        count = 0;
       } else {
-          file_stream.read(&buffer[0], buffer.size());
-          count -= buffer_size;
+        file_stream.read(&buffer[0], buffer.size());
+        count -= buffer_size;
       }
 
       if (!send_buffer(buffer))
@@ -116,7 +121,8 @@ private:
   size_t size_fict_;
 
 public:
-  socket_wrapper::Socket client_sock_;
+  /*socket_wrapper::Socket*/
+  int client_sock_;
 };
 
 class Client {
@@ -126,8 +132,8 @@ private:
   std::string filename_;
 
 public:
-  Client(socket_wrapper::Socket sock, std::string filename, int fict, size_t size_fict)
-        : tsr_(std::move(sock), fict, size_fict), filename_(filename) {
+  Client(int sock, std::string filename, int fict, size_t size_fict)
+      : tsr_(sock, fict, size_fict), filename_(filename) {
     std::cout << "Client [" << static_cast<int>(tsr_.ts_socket()) << "] "
               << "was created..." << std::endl;
   }
@@ -179,7 +185,7 @@ int main(int argc, char const *argv[]) {
     return EXIT_FAILURE;
   }
 
-  socket_wrapper::SocketWrapper sock_wrap;
+  // socket_wrapper::SocketWrapper sock_wrap;
   const int port{std::stoi(argv[1])};
 
   struct addrinfo hints, *addr;
@@ -190,18 +196,24 @@ int main(int argc, char const *argv[]) {
   hints.ai_protocol = IPPROTO_TCP;
   getaddrinfo(NULL, argv[1], &hints, &addr);
 
-  socket_wrapper::Socket sock = {addr->ai_family, addr->ai_socktype,
-                                 addr->ai_protocol};
+  /*socket_wrapper::Socket*/
+  int sock = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
   std::cout << "Starting echo server on the port " << port << "...\n";
 
   if (!sock) {
-    std::cerr << sock_wrap.get_last_error_string() << std::endl;
+    //    std::cerr << sock_wrap.get_last_error_string() << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  char yes = '1';
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))) {
+    //    std::cerr << sock_wrap.get_last_error_string() << std::endl;
     return EXIT_FAILURE;
   }
 
   if (bind(sock, addr->ai_addr, addr->ai_addrlen) != 0) {
-    std::cerr << sock_wrap.get_last_error_string() << std::endl;
+    // std::cerr << sock_wrap.get_last_error_string() << std::endl;
     // Socket will be closed in the Socket destructor.
     return EXIT_FAILURE;
   }
@@ -222,10 +234,11 @@ int main(int argc, char const *argv[]) {
   socklen_t client_len = sizeof(client_addr);
   char ipbuff[INET_ADDRSTRLEN];
 
-  socket_wrapper::Socket newsockfd =
+  /*socket_wrapper::Socket*/
+  int newsockfd =
       accept(sock, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
-  //close(sock);
-  shutdown(sock,SHUT_RDWR);
+  // close(sock);
+  shutdown(sock, SHUT_RDWR);
   std::string str_buffer;
 
   while (run) {
@@ -276,26 +289,25 @@ int main(int argc, char const *argv[]) {
         run = false;
       }
 
-      if ("get" == command && str_buffer.length() > 4) {    
-          if ("beans" == fiction) {
-               fict=1;
-          }
-           else if ("size" == fiction) {
-               fict=2;
-          }
+      if ("get" == command && str_buffer.length() > 4) {
+        if ("beans" == fiction) {
+          fict = 1;
+        } else if ("size" == fiction) {
+          fict = 2;
+        }
 
-          Client client(std::move(newsockfd), filename, fict, size_fict);
-          auto result = client.process();
+        Client client(newsockfd, filename, fict, size_fict);
+        auto result = client.process();
 
-          if (result)
-            std::cout << "The end" << std::endl;
-          run = false;
+        if (result)
+          std::cout << "The end" << std::endl;
+        // run = false;
       }
     }
   }
 
-  //close(newsockfd);
-  shutdown(newsockfd,SHUT_RDWR);
+  // close(newsockfd);
+  shutdown(newsockfd, SHUT_RDWR);
 
   return EXIT_SUCCESS;
 }
