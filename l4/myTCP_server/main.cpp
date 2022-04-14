@@ -18,10 +18,6 @@
 namespace fs = std::filesystem;
 // const auto buffer_size = 4096;
 
-// Yes, I received your code. But why mess up the better code.
-// I just embellished. After analyzing the code,
-// I couldn't think otherwise.
-
 #if !defined(MAX_PATH)
 #define MAX_PATH (256)
 #endif
